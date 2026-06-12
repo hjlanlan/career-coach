@@ -90,17 +90,19 @@ async function callClaude(message, slot, context) {
 // ===== HTTP 服务器 =====
 
 const server = http.createServer(async (req, res) => {
-  // CORS 头
+  // CORS 头 —— 匹配所有请求方法
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // OPTIONS 预检
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
     return;
   }
 
+  // POST /api/classify —— 核心分类端点
   if (req.method === 'POST' && req.url === '/api/classify') {
     try {
       const rawBody = await readBody(req);
@@ -115,7 +117,6 @@ const server = http.createServer(async (req, res) => {
       const text = await callClaude(message, slot, context || '');
       const value = text.trim();
 
-      // 校验输出
       if (!['High', 'Medium', 'Low'].includes(value)) {
         console.warn(`Unexpected LLM output: "${value}", defaulting to null`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -134,10 +135,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // 健康检查
-  if (req.method === 'GET' && req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok', hasKey: !!ANTHROPIC_API_KEY }));
+  // GET 请求（根路径、健康检查、Render 自动检测）
+  if (req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>Career Coach Proxy</title>
+<style>body{font-family:-apple-system,sans-serif;max-width:400px;margin:60px auto;text-align:center;color:#333}
+a{color:#6366f1}</style></head>
+<body>
+  <h1>🧭 运行中</h1>
+  <p>API Key: ${ANTHROPIC_API_KEY ? '✅ 已配置' : '❌ 未配置'}</p>
+  <p>端点: <code>POST /api/classify</code></p>
+  <p><a href="/health">健康检查</a></p>
+</body></html>`);
     return;
   }
 
